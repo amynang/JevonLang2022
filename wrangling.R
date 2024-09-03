@@ -3,8 +3,10 @@ library(geodata)
 library(sp)
 library(tidyverse)
 
+####################################################### read from url ##########
 FR_occurrences = read_csv("https://raw.githubusercontent.com/ashleylang/BAM/v.01/FR_occurrences.csv")
 FR_measurements = read_csv("https://raw.githubusercontent.com/ashleylang/BAM/v.01/FR_measurements.csv") %>%
+################################################################################  
   pivot_wider(names_from = measurementType, 
               values_from = measurementValue) %>% 
   rename(Myc_type = 'Mycorrhiza type')
@@ -43,13 +45,19 @@ baad_df <- as.data.frame(baad$data) %>%
   dplyr::select(studyName, latitude, longitude, species, vegetation, map, mat, pft, a.lf, h.t, d.bh, m.lf, m.st, m.so, m.rt, m.to, 	ma.ilf) %>%
   separate(species, c("genus", "species"), extra = "drop", fill = "right") %>%
   left_join(fungal_root_sp, by = c("genus", "species")) %>% 
-  mutate(LmTm = m.lf/ m.to,
-         RmTm = m.rt/m.to,
-         SmTm= m.st/m.to,
+################################## alternative proportion calculation ##########
+  mutate(tot = m.lf+m.rt+m.st,
+         LmTm = m.lf/tot,
+         RmTm = m.rt/tot,
+         SmTm = m.st/tot,
+         check = LmTm+RmTm+SmTm,
+################################################################################         
          pft = as.factor(pft)) %>% 
   filter( myc_group != "ERC" & myc_group != "Other" & pft != "DG")
 
 ###Extract MAT/MAP from WorldClim----
+
+################################# geodata and terra instead of raster ##########
 r = worldclim_global(var = "bio", res = 10, path = "wc", version = "2.1")
 r <- r[[c(1,12)]]
 
@@ -64,7 +72,7 @@ df <- cbind.data.frame(coords,values) %>%
   rename(latitude = y, longitude = x,
          Temp = wc2.1_10m_bio_1, Prec = wc2.1_10m_bio_12) %>% 
   select(-ID)
-
+################################################################################
 
 ###filtering----
 #Now the full version of the data with baad_df, myc types, and climate:
@@ -117,17 +125,23 @@ map=ggplot(data=world)+
 
 ####model prep-----
 #make clean dataset for models 
+######################### keep raw rootc, shoot, leaf mass and height ##########
 full_df_mod <- full_df %>%
-  dplyr::select(RmTm, LmTm, SmTm, m.to, log_ht, leaf_habit, myc_group, Temp, Prec, study_species, family, order) %>%
+  dplyr::select(m.rt, m.st, m.lf, 
+                RmTm, SmTm, LmTm, 
+                tot, m.to, 
+                h.t, log_ht, 
+################################################################################
+                leaf_habit, myc_group, Temp, Prec, study_species, family, order) %>%
   drop_na() %>% 
   separate(study_species, into=c("Study", "Genus", "Species"), sep="_", remove=F) %>% 
-  unite(SppName, c(Genus, Species), sep="_") %>% 
-  mutate(.before = m.to,
-         tot = rowSums(.[,1:3]),
-         roots = RmTm/tot,
-         shoots = SmTm/tot,
-         leaves = LmTm/tot)
+  unite(SppName, c(Genus, Species), sep="_") 
 #1429 observations
+
+# individuals of each species species per study
+View(as.data.frame(table(full_df_mod$SppName, full_df_mod$Study)) %>% filter(Freq>0))
+View(as.data.frame(table(full_df_mod$SppName)) %>% filter(Freq>0))
+
 
 full_df_mod %>% group_by(myc_group) %>% summarise(fam_num = n_distinct(SppName))
 #species by myc type : 34 AM, 21 ECM

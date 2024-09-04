@@ -15,15 +15,15 @@ bibliography: references.bib
 
 ## the point of this exercise
 
-@jevon2022 examined how tree properties like leaf habit (evergreen vs deciduous) and type of mycorrhizal association (arbuscular vs ectomycorrhizal) can influence the relationship between tree growth and biomass allocation, across 55 different tree species.
+@jevon2022 examined how tree properties like leaf habit (evergreen *vs* deciduous) and type of mycorrhizal association (arbuscular *vs* ectomycorrhizal) can influence the relationship between tree growth and biomass allocation, across 55 different tree species. Since this post is going to be light on ecology and heavy on stats, you might want to ~~skim~~ peruse their paper first. It's really, really good!
 
-My interest in this data-set is twofold. Examining biomass allocation means that we are looking at proportions; not just the leaf biomass of a tree but the proportion of its total biomass that is leaves. Proportions, which are bound to (0,1), can be analysed using the Beta distribution, so that model estimates respect their bounded nature[^1]. A tree can't have more than 100% of its biomass in leaves and a model using the Beta distribution will not make estimates outside the 0-1 range. While the Beta distribution allows us to model simple proportions (e.g. proportion of biomass that is leaves vs not leaves), the *Dirichlet* distribution is an extension of the Beta that can accommodate proportions of more than two components (i.e. proportions of biomass that are leaves, stems and roots)[^2]. On the other hand, working with Dirichlet models is more cumbersome and I am not sure that we get more out of them than fitting three individual Beta models, one for each component. Let's find out.
+My interest in this data-set is twofold. Examining biomass allocation means that we are looking at proportions; not just the leaf biomass of a tree but the proportion of its total biomass that is leaves. Proportions, which are bound to (0,1), can be analysed using the Beta distribution, so that model estimates respect their bounded nature[^1]. A tree can't have more than 100% of its biomass in leaves and accordingly, a model using the Beta distribution will not make estimates outside the 0-1 range. While the Beta distribution allows us to model simple proportions (e.g. proportion of biomass that is leaves vs not leaves), the *Dirichlet* distribution is an extension of the Beta that can accommodate proportions of more than two components (i.e. proportions of biomass that are leaves, stems and roots)[^2]. On the other hand, working with Dirichlet models is more cumbersome and I am not sure that we get more out of them than fitting three individual Beta models, one for each component. Let's find out.
 
 [^1]: I don't need to go into that because there an excellent discussion [here](https://doi.org/10.59350/7p1a4-0tw75)
 
 [^2]: A few years back @douma2019 wrote a review on how to work with continuous proportions with these two distributions. Their overview of support for proportional models is only slightly out of date; brms *does* support Dirichlet models.
 
-The other cool feature of @jevon2022 is the phylogenetic tree in Figure 1a, showing the relatedness of the 55 species of their study. The authors did use multilevel models to acount for observations clustered within studies and species but they did not make use of the phylogenetic tree. We are going to try and use that information to account for the non-independence of related tree species. We are in luck, because brms supports this.
+The other cool feature of @jevon2022 is the phylogenetic tree in Figure 1a, showing the relatedness of the 55 species of their study. The authors did use multilevel models to acount for observations clustered within studies and species but they did not make use of the phylogenetic tree in their analysis. We are going to try and use that information to account for the non-independence of related tree species. We are in luck, because brms supports this.
 
 The authors of the original paper have made all their code available [here](https://github.com/ashleylang/BAM). They've also written a very clear Methods section, outlining every choice they made in the selection of the data, which are coming from the Biomass and Allometry Database[^3]. I have largely retraced their wrangling steps, with minor adjustments[^4].
 
@@ -33,11 +33,17 @@ The authors of the original paper have made all their code available [here](http
 
     4.1: (a meta-footnote 😎) You'd think this is a breaking change but in their repository, Jevon and Lang include the bioclimatic data necessary to run their code without interruptions. So, from a strict reproducibility perspective, ⭐⭐⭐⭐⭐
 
+## *caveat lector*
+
+I am not a forest ecologist. I have not spent nearly as much time[^5] thinking about the processes explored here, as the authors of the original study, nor can I match their expertise on the subject. The motivation behind this is neither to affirm nor to question the findings of the original study. I am mainly interested in the technicalities of modelling proportions and accounting for phylogenetic relatedness. But I am also, *very emphatically,* not a statistician. I have tried to explicitly justify every analytical choice I have made here. I would like to believe that my choices are sensible. But if you read this and you spot any mistakes, I would be grateful if you point them out to me.
+
+[^5]: This is my twisted idea of a Sunday morning's leisure activity.
+
 ## baby steps
 
-Let's start simple, by examining the effect of tree height on root, stem[^5] and leaf (relative) mass for a single species, *Betula alleghaniensis.* It's a good place to start because it is the species with the largest number of individuals in the data (295 trees, unevenly distributed across three locations). Before any model fitting, we are going to standardize our predictor, height; let's divide the height of each *B. alleghaniensis* individual by the median height and then take the base 2 logarithm of that quantity. The first of these steps brings individuals of median height to 1. The second step pushes them to 0 (`log2(1) = 0`) *and* now a one unit change (which is what the coefficient for the predictor represents) corresponds to a doubling of height. I'll do this for all species, not just the focal one.
+Let's start simple, by examining the effect of tree height on root, stem[^6] and leaf (relative) mass for a single species, *Betula alleghaniensis.* It's a good place to start because it is the species with the largest number of individuals in the data (295 trees, unevenly distributed across three locations). Before any model fitting, we are going to standardize our predictor, height; let's divide the height of each *B. alleghaniensis* individual by the median height of that species and then take the base 2 logarithm of that quantity. The first of these steps brings individuals of median height at 1. The second step pushes them at 0 (`log2(1) = 0`) so that the intercept, the model's estimate at 0, will the estimated proportions for a median individual of *B. alleghaniensis* **and** now a one-unit change (which is what the coefficient for the predictor represents) corresponds to a doubling of height. I'll do this for all species, not just the focal one.
 
-[^5]: I was very invested in a shoots and leaves joke but
+[^6]: I was very invested in a *shoots and leaves* joke but
 
     -   the roots spoil it
 

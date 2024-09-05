@@ -42,7 +42,7 @@ fungal_root_sp <- fungal_root %>%
 baad <- baad.data::baad_data()
 dict <- as.data.frame(baad$dictionary)
 baad_df <- as.data.frame(baad$data) %>% 
-  dplyr::select(studyName, latitude, longitude, species, vegetation, map, mat, pft, a.lf, h.t, d.bh, m.lf, m.st, m.so, m.rt, m.to, 	ma.ilf) %>%
+  dplyr::select(studyName, location, latitude, longitude, species, vegetation, map, mat, pft, a.lf, h.t, d.bh, m.lf, m.st, m.so, m.rt, m.to, 	ma.ilf) %>%
   separate(species, c("genus", "species"), extra = "drop", fill = "right") %>%
   left_join(fungal_root_sp, by = c("genus", "species")) %>% 
 ################################## alternative proportion calculation ##########

@@ -15,7 +15,7 @@ bibliography: references.bib
 
 ## the point of this exercise
 
-@jevon2022 examined how tree properties like leaf habit (evergreen *vs* deciduous) and type of mycorrhizal association (arbuscular *vs* ectomycorrhizal) can influence the relationship between tree growth and biomass allocation, across 55 different tree species. Since this post is going to be light on ecology and heavy on stats, you might want to ~~skim~~ peruse their paper first. It's really, really good!
+@jevon2022 examined how tree properties like leaf habit (evergreen *vs* deciduous) and type of mycorrhizal association (arbuscular *vs* ectomycorrhizal) can influence the relationship between tree size and biomass allocation, across 55 different tree species. Since this post is going to be light on ecology and heavy on stats, you might want to ~~skim~~ peruse their paper first. It's really, really good!
 
 My interest in this data-set is twofold. Examining biomass allocation means that we are looking at proportions; not just the leaf biomass of a tree but the proportion of its total biomass that is leaves. Proportions, which are bound to (0,1), can be analysed using the Beta distribution, so that model estimates respect their bounded nature[^1]. A tree can't have more than 100% of its biomass in leaves and accordingly, a model using the Beta distribution will not make estimates outside the 0-1 range. While the Beta distribution allows us to model simple proportions (e.g. proportion of biomass that is leaves vs not leaves), the *Dirichlet* distribution is an extension of the Beta that can accommodate proportions of more than two components (i.e. proportions of biomass that are leaves, stems and roots)[^2]. On the other hand, working with Dirichlet models is more cumbersome and I am not sure that we get more out of them than fitting three individual Beta models, one for each component. Let's find out.
 
@@ -23,7 +23,7 @@ My interest in this data-set is twofold. Examining biomass allocation means that
 
 [^2]: A few years back @douma2019 wrote a review on how to work with continuous proportions with these two distributions. Their overview of support for proportional models is only slightly out of date; brms *does* support Dirichlet models.
 
-The other cool feature of @jevon2022 is the phylogenetic tree in Figure 1a, showing the relatedness of the 55 species of their study. The authors did use multilevel models to acount for observations clustered within studies and species but they did not make use of the phylogenetic tree in their analysis. We are going to try and use that information to account for the non-independence of related tree species. We are in luck, because brms supports this.
+The other cool feature of @jevon2022 is the phylogenetic tree in (their) Figure 1a, showing the relatedness of the 55 species of their study. The authors did use multilevel models to acount for observations clustered within studies and species but they did not make use of the phylogenetic tree in their analysis. We are going to try and use that information to account for the non-independence of related tree species. We are in luck, because brms supports this.
 
 The authors of the original paper have made all their code available [here](https://github.com/ashleylang/BAM). They've also written a very clear Methods section, outlining every choice they made in the selection of the data, which are coming from the Biomass and Allometry Database[^3]. I have largely retraced their wrangling steps, with minor adjustments[^4].
 
@@ -35,13 +35,13 @@ The authors of the original paper have made all their code available [here](http
 
 ## *caveat lector*
 
-I am not a forest ecologist. I have not spent nearly as much time[^5] thinking about the processes explored here, as the authors of the original study, nor can I match their expertise on the subject. The motivation behind this is neither to affirm nor to question the findings of the original study. I am mainly interested in the technicalities of modelling proportions and accounting for phylogenetic relatedness. But I am also, *very emphatically,* not a statistician. I have tried to explicitly justify every analytical choice I have made here. I would like to believe that my choices are sensible. But if you read this and you spot any mistakes, I would be grateful if you point them out to me.
+I am not a forest ecologist. I have not spent nearly as much time[^5] thinking about the processes explored here, as the authors of the original study, nor can I match their expertise on the subject. The motivation behind this is not to question nor affirm the original study. The authors fitted an ecologically motivated model, which they then simplified aiming for parsimony. I am mainly interested in the technicalities of modelling proportions and accounting for phylogenetic relatedness. I will therefore start from the ground up, adding complexity, to see how far I get before I run into trouble. But I am also, *very emphatically,* not a statistician. I have tried to explicitly justify every choice I have made here. I would like to believe that my choices are sensible. But if you read this and you spot any mistakes, I would be grateful if you point them out to me.
 
-[^5]: This is my twisted idea of a Sunday morning's leisure activity.
+[^5]: This is my twisted idea of a Sunday mornings' leisure activity.
 
 ## baby steps
 
-Let's start simple, by examining the effect of tree height on root, stem[^6] and leaf (relative) mass for a single species, *Betula alleghaniensis.* It's a good place to start because it is the species with the largest number of individuals in the data (295 trees, unevenly distributed across three locations). Before any model fitting, we are going to standardize our predictor, height; let's divide the height of each *B. alleghaniensis* individual by the median height of that species and then take the base 2 logarithm of that quantity. The first of these steps brings individuals of median height at 1. The second step pushes them at 0 (`log2(1) = 0`) so that the intercept, the model's estimate at 0, will the estimated proportions for a median individual of *B. alleghaniensis* **and** now a one-unit change (which is what the coefficient for the predictor represents) corresponds to a doubling of height. I'll do this for all species, not just the focal one.
+Let's start simple, by examining the effect of tree height on root, stem[^6] and leaf (relative) mass for a single species, *Betula alleghaniensis.* It's a good place to start because it is the species with the largest number of individuals in the data (295 trees, unevenly distributed across three locations). Median height is 1.59 m with a range of 0.5-24.42 m. It's worth keeping in mind that within-species variation in height and biomass allocation is a combination of ontogeny and environment (*e.g.* competition, climate).
 
 [^6]: I was very invested in a *shoots and leaves* joke but
 
@@ -49,8 +49,13 @@ Let's start simple, by examining the effect of tree height on root, stem[^6] and
 
     -   turns out stems and shoots are not interchangeable. Apparently, *any* *ecologist should know that*.
 
-``` r
-#| eval: FALSE
+Before any model fitting, we are going to standardize our predictor, height; let's divide the height of each *B. alleghaniensis* individual by the median height of that species and then take the base 2 logarithm of that quantity. The first of these steps brings individuals of median height at 1. The second step pushes them at 0 (`log2(1) = 0`) so that the intercepts, the model's estimates at 0, will be the estimated proportions for a median individual of *B. alleghaniensis* **and** now a one-unit change (which is what the coefficient for the predictor represents) corresponds to a doubling of height. I'll do this for all species, not just the focal one.
+
+```{r}
+#| eval: false
+#| code-fold: true
+#| code-summary: "Show the code"
+
 within.sp = full_df_mod %>% 
   rename(roots = RmTm,
          stems = SmTm,
@@ -66,3 +71,200 @@ within.sp = full_df_mod %>%
          N = n()) %>% 
   ungroup()
 ```
+
+Now we will first fit three Beta regression models, each one estimating the effect of relative height on the proportion of an individual's total biomass that is roots, stems or leaves. We will let the intercept vary by study. Then we will estimate the same relationships but this time, fitting one model for all three proportions[^7].
+
+[^7]: Technically, were estimating two of them, getting the third one for free, which is why the Dirichlect model has n-1 of everything (intercepts, slope coefficients), for n components. This is similar to how in a Beta regression, we are implicitly also estimating the proportion that is not leaves, for example.
+
+```{r}
+#| eval: FALSE
+library(brms)
+library(tidybayes)
+library(modelr)
+
+# one model for roots
+m.Bet_alle.r <- brm(bf(roots ~ rel.ht + (1|Study)), 
+                    data = within.sp %>% 
+                      filter(SppName == "Betula_alleghaniensis"), 
+                    family = Beta(), 
+                    chains = 4, 
+                    iter = 6000, 
+                    warmup = 3000, 
+                    cores = 4, 
+                    control = list(adapt_delta = 0.99),
+                    backend = "cmdstanr",
+                    file = "fits/m.Bet_alle.r",
+                    seed = 123)
+pp_check(m.Bet_alle.r, ndraws = 200)
+
+# one model for stems
+m.Bet_alle.s <- brm(bf(stems ~ rel.ht + (1|Study)), 
+                    data = within.sp %>% 
+                      filter(SppName == "Betula_alleghaniensis"), 
+                    family = Beta(), 
+                    chains = 4, 
+                    iter = 6000, 
+                    warmup = 3000, 
+                    cores = 4, 
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 12),
+                    backend = "cmdstanr",
+                    file = "fits/m.Bet_alle.s",
+                    seed = 123)
+pp_check(m.Bet_alle.s, ndraws = 200)
+
+# one model for leaves
+m.Bet_alle.l <- brm(bf(leaves ~ rel.ht + (1|Study)), 
+                    data = within.sp %>% 
+                      filter(SppName == "Betula_alleghaniensis"), 
+                    family = Beta(), 
+                    chains = 4, 
+                    iter = 6000, 
+                    warmup = 3000, 
+                    cores = 4, 
+                    control = list(adapt_delta = 0.99,
+                                   max_treedepth = 12),
+                    backend = "cmdstanr",
+                    file = "fits/m.Bet_alle.l",
+                    seed = 123)
+pp_check(m.Bet_alle.l, ndraws = 200)
+
+
+# all in one
+m.Bet_alle.rsl <- brm(bf(RSL ~ rel.ht + (1|Study)), 
+                      data = within.sp %>% 
+                        filter(SppName == "Betula_alleghaniensis"), 
+                      family = dirichlet(), 
+                      chains = 4, 
+                      iter = 9000, 
+                      warmup = 3000, 
+                      cores = 4, 
+                      control = list(adapt_delta = 0.99,
+                                     max_treedepth = 12),
+                      backend = "cmdstanr",
+                      file = "m.Bet_alle.rsl",
+                      seed = 123)
+pp_check(m.Bet_alle.rsl, ndraws = 100)
+# Error: 'pp_check' is not implemented for this family.
+```
+
+First sign of "trouble"; we cannot use pp_check() for a Dirichlet regression, to assess how well the model captures the distribution of the data. We can make density overlay plots from scratch though:
+
+```{r}
+#| eval: FALSE
+library(bayesplot)
+# generate predictions
+yrep <- posterior_predict(m.Bet_alle.rsl, ndraws = 200)
+# yrep is a three dimensional array:
+# 200 predictions x 295 observations x 3 response components
+dim(yrep)
+# here's one slice:
+yrep[1, 1, 1:3]
+#     roots     stems    leaves 
+# 0.3791285 0.4160540 0.2048174
+
+# three custom-made density overlay plots, similar to the default pp_check() output
+ppc_dens_overlay(within.sp$roots[within.sp$SppName == "Betula_alleghaniensis"], 
+                 yrep[ , 1:295, 1])
+ppc_dens_overlay(within.sp$stems[within.sp$SppName == "Betula_alleghaniensis"], 
+                 yrep[ , 1:295, 2])
+ppc_dens_overlay(within.sp$leaves[within.sp$SppName == "Betula_alleghaniensis"], 
+                 yrep[ , 1:295, 3])
+```
+
+And now we can compare the estimates of the two approaches. To make it easier to see any differences, I have combined the draws from the three Beta models before pushing them through ggplot, so that we can have one plot for the three Betas (left) and one for the Dirichlet regression (right):
+
+```{r}
+#| eval: false
+#| code-fold: true
+#| code-summary: "Show the code"
+root = within.sp %>%
+  data_grid(rel.ht = seq_range(rel.ht, n = 51)) %>%
+  add_epred_draws(m.Bet_alle.r, re_formula = NA) %>% 
+  add_column(.category = "roots")
+
+stem = within.sp %>%
+  data_grid(rel.ht = seq_range(rel.ht, n = 51)) %>%
+  add_epred_draws(m.Bet_alle.s, re_formula = NA) %>% 
+  add_column(.category = "stems")
+
+leaf = within.sp %>%
+  data_grid(rel.ht = seq_range(rel.ht, n = 51)) %>%
+  add_epred_draws(m.Bet_alle.l, re_formula = NA) %>% 
+  add_column(.category = "leaves")
+
+rsl = rbind(root,stem,leaf)
+rsl$.category = factor(rsl$.category, levels = c("roots","stems","leaves"))
+
+fig1a = rsl %>%
+  ggplot(aes(x = rel.ht, y = .epred, color = .category,
+             fill = .category)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+  stat_lineribbon(aes(y = .epred), .width = c(0.9),
+                  point_interval = "median_qi",
+                  linewidth = .2)+
+  scale_x_continuous(breaks = c(-3,-1,0,1,3), 
+                     labels = c("1/8","1/2",1,2,8)) +
+  scale_color_manual(values = c("#efd08e","#8d8067","#9dbc9b")) +
+  scale_fill_manual(values = c("#efd08e80","#8d806780","#9dbc9b80")) +
+  ylab("Biomass proportion") +
+  xlab("multiplicative change in relative height") +
+  theme_bw() +
+  theme(legend.position = "none") + 
+  ggtitle("Predictions of three Beta regressions")
+
+fig1b = within.sp %>%
+  data_grid(rel.ht = seq_range(rel.ht, n = 51)) %>%
+  add_epred_draws(m.Bet_alle.rsl, re_formula = NA) %>%
+  ggplot(aes(x = rel.ht, y = .epred, color = .category,
+             fill = .category)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
+  stat_lineribbon(aes(y = .epred), .width = c(0.9),
+                  point_interval = "median_qi",
+                  linewidth = .2)+
+  scale_x_continuous(breaks = c(-3,-1,0,1,3), 
+                     labels = c("1/8","1/2",1,2,8)) +
+  scale_color_manual(values = c("#efd08e","#8d8067","#9dbc9b")) +
+  scale_fill_manual(values = c("#efd08e80","#8d806780","#9dbc9b80")) +
+  ylab("Biomass proportion") +
+  xlab("multiplicative change in relative height") +
+  theme_bw() +
+  theme(legend.title = element_blank()) + 
+  ggtitle("Predictions of Dirichlet regression")
+
+library(patchwork)
+fig1 = fig1a+fig1b
+
+ggsave("figs/fig1.png", fig1, units = "mm",
+       width = 180,
+       height = 75,
+       scale = 1.4)
+```
+
+![Figure 1: Model estimates with the two different approaches. Thin lines are the median estimates, bound by 90% credible envelopes.](figs/fig1.png){fig-align="center"}
+
+They are not alarmingly different but you can see the wider uncertainty for the stem proportion across the height gradient and the change in the shape of the root-height relationship. The big picture is the same though and at this point, while we are only looking at one species and not yet asking how leaf habit or mycorrhizal association can modify this relationship, these differences are inconsequential.
+
+## the next section
+
+Getting cocky now, we are going to throw the full dataset into the Dirichlet model. We now have 55 species with different leaf habits and mycorrhizal associations. I will cut a few corners here[^8], going directly to a model that includes relative height, habit and mycorrhizal group as well as their two-way interactions as predictors. We are also going to let the effect of height vary by species and study. We have a fairly sparse dataset with species information coming from more than one study/location while studies/locations feature more than one species. This sounds like a case for crossed random effects. But I think, *I think*, that we mainly want to account for variation across species and *then* species information that might vary from one study to another. I expect that variation across species overwhelms variation across studies. I will therefore nest studies within species for now.
+
+[^8]: There were no convergence problems with models that included no interactions and intercept-only random effects.
+
+```{r}
+#| eval: false
+m.all.rsl_hhm2 <- brm(bf(RSL ~ (rel.ht + leaf_habit + myc_group)^2 + (1 + rel.ht|SppName/Study)), 
+                     data = within.sp, 
+                     family = dirichlet(), 
+                     chains = 4, 
+                     iter = 9000, 
+                     warmup = 3000, 
+                     cores = 4, 
+                     control = list(adapt_delta = 0.99,
+                                    max_treedepth = 12),
+                     backend = "cmdstanr",
+                     file = "m.all.rsl_hhm2",
+                     seed = 123)
+```
+
+![](figs/fig2.png){fig-align="center"}

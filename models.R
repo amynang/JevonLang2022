@@ -216,5 +216,37 @@ fig2 = within.sp %>%
   theme(legend.title = element_blank())
 ggsave("figs/fig2.png", fig2, units = "mm",
        width = 180,
-       height = 150,
+       height = 140,
        scale = 1.4)
+
+
+
+
+
+library(ape)
+
+phylo = read.tree("phyliptree1.phy")
+
+A = ape::vcv.phylo(phylo)
+dimnames(A) = list(unique(within.sp$SppName),
+                   unique(within.sp$SppName))
+
+within.sp$phylo = within.sp$SppName
+
+m.all.rsl_hhm_ph <- brm(bf(RSL ~ (rel.ht  + leaf_habit + myc_group)^2 + 
+                             (1|gr(phylo, cov = A))
+                           + (1|SppName)
+), 
+data = within.sp, 
+data2 = list(A = A),
+family = dirichlet(), 
+chains = 4, 
+iter = 9000, 
+warmup = 3000, 
+cores = 4, 
+control = list(adapt_delta = 0.99,
+               max_treedepth = 12),
+backend = "cmdstanr",
+file = "fits/m.all.rsl_hhm_ph",
+seed = 123)
+summary(m.all.rsl_hhm2)

@@ -142,7 +142,7 @@ m.Bet_alle.rsl <- brm(bf(RSL ~ rel.ht + (1|Study)),
                       control = list(adapt_delta = 0.99,
                                      max_treedepth = 12),
                       backend = "cmdstanr",
-                      file = "m.Bet_alle.rsl",
+                      file = "fits/m.Bet_alle.rsl",
                       seed = 123)
 pp_check(m.Bet_alle.rsl, ndraws = 100)
 # Error: 'pp_check' is not implemented for this family.

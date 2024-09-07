@@ -439,7 +439,7 @@ fig5 = within.sp %>%
 ggsave("figs/fig5.png", fig5, units = "mm",
        width = 140,
        height = 140,
-       scale = 1.4)
+       scale = 1)
 
 
 

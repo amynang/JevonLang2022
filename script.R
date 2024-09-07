@@ -27,7 +27,6 @@ within.sp = full_df_mod_new %>%
 
 ######################## Beta vs Dirichlet for one species #####################
 library(brms)
-library(rstan)
 
 m.Bet_alle.s <- brm(bf(stems ~ rel.ht + (1|Study)), 
                     data = within.sp %>% 
@@ -45,6 +44,7 @@ m.Bet_alle.s <- brm(bf(stems ~ rel.ht + (1|Study)),
 pp_check(m.Bet_alle.s, ndraws = 200)
 plot(conditional_effects(m.Bet_alle.s),
      points = TRUE)
+
 
 m.Bet_alle.r <- brm(bf(roots ~ rel.ht + (1|Study)), 
                     data = within.sp %>% 
@@ -294,11 +294,58 @@ ggsave("figs/fig2.png", fig2, units = "mm",
        scale = 1.4)
 
 
+fig3a = within.sp %>% 
+  data_grid(expand_grid(rel.ht = c(0),
+                        leaf_habit = c("deciduous"),
+                        myc_group = c("ECM","AM"))) %>% 
+  add_epred_draws(m.all.rsl_hhm2,
+                  re_formula = NA) %>% 
+  mutate(group = str_c(.category, myc_group)) %>% 
+  ggplot(aes(x = .epred, fill = factor(group))) +
+  stat_halfeye(aes(shape = myc_group),
+               .width = c(.9),
+               size = 5,
+               alpha = .5) +
+  scale_fill_manual(values = c("#9dbc9b","#9dbc9b",
+                               "#efd08e","#efd08e",
+                               "#8d8067","#8d8067"),
+                    guide = "none") +
+  ylab("") +
+  xlab("estimate") +
+  facet_wrap(~.category,
+             scales = "free") +
+  theme_bw() + 
+  ggtitle("Biomass allocation of deciduous trees at median height")
+
+fig3b = within.sp %>% 
+  data_grid(expand_grid(rel.ht = c(0),
+                        leaf_habit = c("evergreen"),
+                        myc_group = c("ECM","AM"))) %>% 
+  add_epred_draws(m.all.rsl_hhm2,
+                  re_formula = NA) %>% 
+  mutate(group = str_c(.category, myc_group)) %>% 
+  ggplot(aes(x = .epred, fill = factor(group))) +
+  stat_halfeye(aes(shape = myc_group),
+               .width = c(.9),
+               size = 5,
+               alpha = .5) +
+  scale_fill_manual(values = c("#9dbc9b","#9dbc9b",
+                               "#efd08e","#efd08e",
+                               "#8d8067","#8d8067"),
+                    guide = "none") +
+  ylab("") +
+  xlab("estimate") +
+  facet_wrap(~.category,
+             scales = "free") +
+  theme_bw() + 
+  ggtitle("Biomass allocation of evergreen trees at median height")
 
 
-
-
-
+fig3 = fig3a/fig3b
+ggsave("figs/fig3.png", fig3, units = "mm",
+       width = 180,
+       height = 120,
+       scale = 1.4)
 
 
 ############################# Phylogenetic regression ##########################
@@ -344,7 +391,7 @@ ppc_dens_overlay(within.sp$leaves,
                  yrep[ , 1:1429, 3])
 
 
-fig3 = within.sp %>%
+fig4 = within.sp %>%
   data_grid(rel.ht = seq_range(rel.ht, n = 51),
             leaf_habit = c("evergreen", 
                            "deciduous"),
@@ -365,7 +412,7 @@ fig3 = within.sp %>%
   xlab("multiplicative change in relative height") +
   theme_bw() +
   theme(legend.title = element_blank())
-ggsave("figs/fig3.png", fig3, units = "mm",
+ggsave("figs/fig4.png", fig4, units = "mm",
        width = 180,
        height = 140,
        scale = 1.4)
@@ -374,22 +421,43 @@ ggsave("figs/fig3.png", fig3, units = "mm",
 
 
 
+
+
+
+
+
+
+
+m.ac.all.rsl_hhm2_h.ph <- brm(bf(RSL ~ (rel.ht2  + leaf_habit + myc_group)^2 + 
+                                   (1 + rel.ht2|gr(phylo, cov = A)) + (1 + rel.ht2|SppName) + (1|Study)), 
+                              data = across.sp, 
+                              data2 = list(A = A),
+                              family = dirichlet(), 
+                              chains = 4, 
+                              iter = 9000, 
+                              warmup = 3000, 
+                              cores = 4, 
+                              control = list(adapt_delta = 0.99,
+                                             max_treedepth = 12),
+                              backend = "cmdstanr",
+                              file = "fits/m.ac.all.rsl_hhm2_h.ph",
+                              seed = 123)
+
 within.sp %>%
-  data_grid(rel.ht = seq_range(rel.ht, n = 51),
-            SppName = "Betula_alleghaniensis",
-            phylo = "Betula_alleghaniensis",
-            Study = c("Delagrange0000b", "Delagrange2004", "Whittaker1974"),
-            leaf_habit = c("deciduous"),
-            myc_group = c("ECM")) %>%
-  add_epred_draws(m.all.rsl_hhm2_h.ph, re_formula = NULL) %>%
-  ggplot(aes(x = rel.ht, y = .epred, color = .category,
+  data_grid(rel.ht2 = seq_range(rel.ht, n = 51),
+            leaf_habit = c("evergreen", 
+                           "deciduous"),
+            myc_group = c("ECM","AM")) %>%
+  add_epred_draws(m.ac.all.rsl_hhm2_h.ph, re_formula = NA) %>%
+  ggplot(aes(x = rel.ht2, y = .epred, color = .category,
              fill = .category)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "grey") +
   stat_lineribbon(aes(y = .epred), .width = c(0.9),
                   point_interval = "median_qi",
                   linewidth = .2)+
-  scale_x_continuous(breaks = c(-3,-1,0,1,3), 
-                     labels = c("1/8","1/2",1,2,8)) +
+  #scale_x_continuous(breaks = c(-3,-1,0,1,3), 
+  #                   labels = c("1/8","1/2",1,2,8)) +
+  facet_grid(myc_group~leaf_habit) + 
   scale_color_manual(values = c("#efd08e","#8d8067","#9dbc9b")) +
   scale_fill_manual(values = c("#efd08e80","#8d806780","#9dbc9b80")) +
   ylab("Biomass proportion") +

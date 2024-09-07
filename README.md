@@ -1,2 +1,3 @@
 # JevonLang2022
-trying a dirichlet regression to reanalyse the data from 10.1002/ecy.3688
+
+companion repository to related blog [post](https://amynang.github.io/posts/20240907-roots-stems-leaves/)

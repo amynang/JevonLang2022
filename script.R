@@ -3,7 +3,8 @@
 # author: Angelos Amyntas
 # date: 20240907
 
-# This script contains the complete code for the analysis presented in [post]
+# This script contains the complete code for the analysis presented in 
+# [https://amynang.github.io/posts/20240907-roots-stems-leaves/]
 
 ########################### load data, standardize height ######################
 library(tidyverse)

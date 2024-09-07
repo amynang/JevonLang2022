@@ -28,7 +28,7 @@ within.sp = full_df_mod_new %>%
 
 ######################## Beta vs Dirichlet for one species #####################
 library(brms)
-
+library(rstan)
 m.Bet_alle.s <- brm(bf(stems ~ rel.ht + (1|Study)), 
                     data = within.sp %>% 
                       filter(SppName == "Betula_alleghaniensis"), 
@@ -415,6 +415,29 @@ fig4 = within.sp %>%
   theme(legend.title = element_blank())
 ggsave("figs/fig4.png", fig4, units = "mm",
        width = 180,
+       height = 140,
+       scale = 1.4)
+
+library(scales)
+
+fig5 = within.sp %>%
+  data_grid(rel.ht = c(0),
+            leaf_habit = c("deciduous",
+                           "evergreen"),
+            myc_group = c("ECM","AM")) %>%
+  add_epred_draws(m.all.rsl_hhm2_h.ph, re_formula = NA) %>% 
+  mutate(.category=fct_relevel(.category,c("leaves","stems","roots"))) %>% 
+  ggplot(aes(x = .draw, y = .epred)) +
+  geom_area(aes(fill = .category), position = position_stack()) +
+  labs(x = NULL, y = "Proportion of total biomass", fill = NULL) +
+  scale_x_continuous(breaks = NULL, expand = c(0, 0)) +
+  scale_y_continuous(labels = label_percent(), expand = c(0, 0)) +
+  scale_fill_manual(values = c("#9dbc9bcc","#8d8067cc","#efd08ecc")) +
+  facet_wrap(leaf_habit~myc_group, strip.position = "bottom", nrow = 1) +
+  theme_bw()
+
+ggsave("figs/fig5.png", fig5, units = "mm",
+       width = 140,
        height = 140,
        scale = 1.4)
 
